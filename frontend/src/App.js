@@ -16,11 +16,34 @@ function App() {
     console.log('connectWallet fonksiyonu çağrıldı');
     if (window.ethereum) {
       try {
-        // Metamask ile bağlantı isteği
+        // MetaMask ile bağlantı isteği
         await window.ethereum.request({ method: 'eth_requestAccounts' });
 
         // BrowserProvider oluşturma (Ethers.js v6)
         const newProvider = new ethers.BrowserProvider(window.ethereum);
+        let network = await newProvider.getNetwork();
+
+        // Sepolia ağı kontrolü
+        if (network.chainId !== 11155111) { // Sepolia'nın chainId'si 11155111
+          try {
+            // Ağ değiştirme isteği
+            await window.ethereum.request({
+              method: 'wallet_switchEthereumChain',
+              params: [{ chainId: '0xaa36a7' }], // 11155111'in hexadecimal karşılığı
+            });
+            // Ağ değiştikten sonra network bilgisini güncelle
+            network = await newProvider.getNetwork();
+          } catch (switchError) {
+            // Ağ eklenmemişse ekleme isteği gönderebilirsiniz
+            if (switchError.code === 4902) {
+              alert('Lütfen MetaMask ağınızı Sepolia olarak ayarlayın.');
+            } else {
+              console.error('Ağ değiştirme hatası:', switchError);
+            }
+            return;
+          }
+        }
+
         const signer = await newProvider.getSigner();
 
         // Kullanıcının adresini alma
@@ -30,7 +53,7 @@ function App() {
         setProvider(newProvider);
 
         // Sözleşme örneği oluşturma
-        const contractAddress = '0x5FbDB2315678afecb367f032d93F642f64180aa3'; // Dağıtım adresi
+        const contractAddress = '0x46f3278867284D5dB56c8979e92c44f4BF3236BE'; // Sepolia'da dağıttığınız sözleşme adresi
         const contractABI = PredictionMarket.abi;
 
         const contractInstance = new ethers.Contract(contractAddress, contractABI, signer);
@@ -41,9 +64,15 @@ function App() {
         setMarketClosed(isClosed);
       } catch (error) {
         console.error('Metamask bağlantı hatası:', error);
+        if (error.code === 4001) {
+          // Kullanıcı bağlantı isteğini reddetti
+          alert('Bağlantı isteği reddedildi.');
+        } else {
+          alert('Cüzdan bağlantısı sırasında bir hata oluştu.');
+        }
       }
     } else {
-      alert('Lütfen Metamask yükleyin!');
+      alert('Lütfen MetaMask yükleyin!');
     }
   };
 
@@ -67,7 +96,11 @@ function App() {
       alert('Bahis başarıyla yapıldı!');
     } catch (error) {
       console.error('Bahis yapma hatası:', error);
-      alert('Bahis yapma işlemi başarısız oldu.');
+      if (error.code === 'INSUFFICIENT_FUNDS') {
+        alert('Yetersiz bakiye. Lütfen hesabınızda yeterli ETH olduğundan emin olun.');
+      } else {
+        alert(`Bahis yapma işlemi başarısız oldu: ${error.reason || error.message}`);
+      }
     }
   };
 
@@ -79,7 +112,7 @@ function App() {
       alert('Ödül başarıyla talep edildi!');
     } catch (error) {
       console.error('Ödül talep etme hatası:', error);
-      alert('Ödül talep etme işlemi başarısız oldu.');
+      alert(`Ödül talep etme işlemi başarısız oldu: ${error.reason || error.message}`);
     }
   };
 
